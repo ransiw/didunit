@@ -1,0 +1,145 @@
+---
+title: "comparison-with-did"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{comparison-with-did}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+Load the required packages
+
+```{r setup}
+library(did)
+library(didunit)
+```
+
+Load the data from `did`
+
+```{r}
+mpdta <- did::mpdta
+```
+
+The first step in the `did` algorithm is to produce the group-time component differences-in-differences estimates. This also reports the run times.
+
+```{r}
+startt = Sys.time()
+set.seed(1234)
+out <- did::att_gt(yname = "lemp",
+              gname = "first.treat",
+              idname = "countyreal",
+              tname = "year",
+              xformla = ~1,
+              data = mpdta,
+              est_method = "reg"
+              )
+endt = Sys.time()
+print(paste("Time elapsed:",endt-startt,"seconds"))
+```
+
+`didunit` produces a similar object but at the more granular unit-time level. This takes longer to run. The syntax remains the same, only the function name should need to change. 
+
+```{r}
+startt = Sys.time()
+set.seed(1234)
+out_it <- att_it(yname = "lemp",
+              gname = "first.treat",
+              idname = "countyreal",
+              tname = "year",
+              xformla = ~1,
+              data = mpdta,
+              est_method = "reg"
+              )
+endt = Sys.time()
+print(paste("Time elapsed:",endt-startt,"seconds"))
+```
+
+View the results using `attit_table()`.
+
+```{r}
+attit_table(out)[1:5,]
+```
+
+```{r}
+attit_table(out_it)[1:5,]
+```
+
+Now these can be aggregated at the group level (time of treatment), or dynamic level (time since treatment), or calendar level (any time in the post-treatment period). Starting with the object produced by the call to the `did:att_gt` function, to take a group level average,
+
+```{r}
+group_effects <- did::aggte(out, type = "group")
+aggite_table(group_effects)[,,-3] # removes the standard error column
+```
+
+Now to the unit-time object produced by `didunit`. The syntax is quite similar, and these aggregation functions are not so computationally expensive to run, even with a larger object. 
+
+```{r}
+group_effects_it <- aggite(out_it, type = "group", na.rm = TRUE, indep = TRUE)
+aggite_table(group_effects_it)
+```
+
+Aggregation on the dynamic level under `did`,
+
+```{r}
+es <- did::aggte(out, type = "dynamic")
+aggite_table(es)[-3]
+```
+
+Dynamic level under `didunit`
+
+```{r}
+es_it <- aggite(out_it, type = "dynamic")
+aggite_table(es_it)
+```
+
+Notice that in all previous outputs the aggregate estimates coincides across the two software. The standard errors are different because `didunit` imputes the residual uncertainty of the control group to the treatment group, where as `did` calculates the treatment group's residual uncertainty from this treatment group.
+
+It is not always the case that the aggregate effects coincide. When covariates are relevant (`xformla`) the estimates differ because the control set's weighting for each control group differs too. 
+
+This is the snippet in `did` where the covariates are `lpop`. 
+
+```{r}
+out_lpop <- did::att_gt(yname = "lemp",
+              gname = "first.treat",
+              idname = "countyreal",
+              tname = "year",
+              xformla = ~lpop,
+              data = mpdta,
+              est_method = "dr"
+              )
+```
+
+The calls in the `didunit` package is similar. Overlap violations give warnings, which are suppressed here.
+
+```{r, message=FALSE, warning=FALSE}
+set.seed(1234)
+out_it_lpop <- att_it(yname = "lemp",
+              gname = "first.treat",
+              idname = "countyreal",
+              tname = "year",
+              xformla = ~lpop,
+              data = mpdta,
+              est_method = "dr"
+              )
+```
+
+Producing the dynamic aggregates with the new group-time estimates. First with `did`
+
+```{r}
+es_lpop <- did::aggte(out_lpop, type = "dynamic")
+aggite_table(es_lpop)[,-3]
+```
+
+Then with `didunit`
+
+```{r}
+es_it_lpop <- aggite(out_it_lpop, type = "dynamic", na.rm = TRUE)
+aggite_table(es_it_lpop)
+```

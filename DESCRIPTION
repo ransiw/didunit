@@ -19,3 +19,8 @@ Depends:
 LazyData: true
 URL: https://github.com/ransiw/didunit
 BugReports: https://github.com/ransiw/didunit/issues
+Suggests: 
+    did,
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr

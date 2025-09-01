@@ -1,0 +1,165 @@
+---
+title: "minimum-wage"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{minimum-wage}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+This vignette goes through some of the main functions of the `didunit` package using the example data in the `did` package. Another vignette compares these two packages for the same data. Use `browseVignettes("didunit")` to access that, and other vignettes. I also recommend vignettes in Brantly Callaway's [article](https://bcallaway11.github.io/did/).  
+
+
+```{r setup}
+library(didunit)
+```
+
+Load the data
+
+```{r}
+mpdta <- didunit::mpdta
+```
+
+The data consists of the minimal number of elements required for the algorithm. The outcome variable of log of teen employment `lemp`, the time (numeric) that the county first raised minimum wage `first.treat`, the numeric identifier for the county or unit `countyreal`, and the `year`. 
+
+```{r}
+mpdta[1:4,]
+```
+
+The first step is to calculate every unit-time difference-in-difference estimate. This code snippet does that.
+
+```{r}
+set.seed(1234)
+out_it <- att_it(yname = "lemp",
+              gname = "first.treat",
+              idname = "countyreal",
+              tname = "year",
+              data = mpdta,
+              conformal_split = 10)
+```
+
+Then these could be aggregated to give an overall post-treatment effect. A simple aggregation could be done as follows,
+
+```{r}
+simple = aggite(out_it, type="simple")
+paste("LCI:",round(simple$overall.lci,3),"ATT:",round(simple$overall.att,3),"UCI:",round(simple$overall.uci,3))
+```
+
+But there is more that can be done. Perhaps, we want to see the effect of raising minimum wage for all counties that raised the minimum wage in 2004, or 2007. 
+
+```{r}
+group = aggite(out_it, type="group")
+```
+
+Unravel the list object into a data-frame.
+
+Counties that raised minimum wage had a fall in teen employment than those that did not. Yet the result is not statistically significant at the 95\% level for any of the groups.
+
+```{r}
+aggite_table(group)
+```
+
+One concern with this type of aggregation is that the counties that raised minimum wage in 2004 have more post-treatment observations than counties that raise minimum wage later. If raising the minimum wage has different dynamic effects, we want to be able to see that. To do that, we could cut the unit-time object `out_it` a different way: at the dynamic level. 
+
+It also gives us placebo trends. Some post-treatment effects are significantly negative.
+
+```{r}
+dynamic = aggite(out_it, type="dynamic")
+aggite_table(dynamic)
+```
+
+We may consider weighting the estimates by population of the county,
+
+```{r}
+set.seed(1234)
+out_it_weight <- att_it(yname = "lemp",
+              gname = "first.treat",
+              idname = "countyreal",
+              tname = "year",
+              data = mpdta,
+              weightsname = "lpop",
+              weightfs = TRUE
+              )
+dynamic_weight = aggite(out_it_weight, type="dynamic")
+aggite_table(dynamic_weight)
+```
+
+
+Until now we have run unconditional differences-in-differences. But, it might not be appropriate to compare counties of very different population. There are a variety of reweighting algorithms (same as those in the `did` package) that can help. I'll demonstrate this with doubly robust weighting. I suppress the warning messages that come when the overlap condition is violated, but we'll quickly see how to figure out the ones that are the problem. 
+
+```{r, message=FALSE, warning=FALSE}
+out_it_lpop <- att_it(yname = "lemp",
+              gname = "first.treat",
+              idname = "countyreal",
+              tname = "year",
+              xformla = ~lpop,
+              data = mpdta,
+              est_method = "dr",
+              conformal_split = 10
+              )
+```
+
+Save this into a table, and look at the units for which the overlap condition failed. 
+
+```{r}
+out_it_lpop_tbl <- attit_table(out_it_lpop)
+cbind(out_it_lpop_tbl[is.na(out_it_lpop_tbl$att),],attcalc=out_it_lpop$attcalc[is.na(out_it_lpop_tbl$att)],ipwqual = out_it_lpop$ipwqual[is.na(out_it_lpop_tbl$att)])
+```
+
+As shown by the `ipwqual` field, the maximum propensity score being that close to 1 shows that almost all the weight lands on just one control unit. This can result in large standard errors. To see what would happen anyway set the option `overlap="retain"` in the initial `att_it` call. 
+
+
+```{r, message=FALSE, warning=FALSE}
+out_it_lpop_r <- att_it(yname = "lemp",
+              gname = "first.treat",
+              idname = "countyreal",
+              tname = "year",
+              xformla = ~lpop,
+              data = mpdta,
+              est_method = "dr",
+              overlap = "retain",
+              conformal_split = 10
+              )
+```
+
+```{r}
+out_it_lpop_tbl <- attit_table(out_it_lpop_r)
+cbind(out_it_lpop_tbl[out_it_lpop_tbl$id==30109,],ipwqual = out_it_lpop_r$ipwqual[out_it_lpop_tbl$id==30109])
+```
+
+You can also choose an aggregation level based on a custom variable. Following snippet creates such a variable out of the `lpop` variable. 
+
+```{r}
+mpdta$lpop2 = round(mpdta$lpop)
+table(mpdta[mpdta$first.treat>0 & mpdta$year==2003,"lpop2"])
+```
+
+There are 8 population categories in the treatment set, but the category 0, 1, and 7 have 3 or less units. 
+
+We may want to compare counties of similar population to each other. Weighting or outcome regression is one approach. Another is to explicitly constrain comparison sets (treatment and control) to be within a certain value of `lpop2`. The `cohort` feature is the one to do that. 
+
+```{r, message=FALSE, warning=FALSE}
+out_it_cohort <- att_it(yname = "lemp",
+              gname = "first.treat",
+              idname = "countyreal",
+              tname = "year",
+              customnames = "lpop2",
+              cohort = "lpop2",
+              data = mpdta)
+```
+
+Aggregates for each of the county sizes (0-8),
+
+```{r}
+cohort = aggite(out_it_cohort, type="lpop2", na.rm = TRUE)
+aggite_table(cohort)
+```
+
+Except for county sizes in the extremes - 1 (for less than 2700) and 6 (for more than 40000) - most county sizes show a decline in teen employment after an increase in minimum wage in comparison to counties of a similar size.

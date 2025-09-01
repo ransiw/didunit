@@ -1,0 +1,78 @@
+---
+output: github_document
+---
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "man/figures/README-",
+  out.width = "100%"
+)
+```
+
+# didunit
+
+<!-- badges: start -->
+<!-- badges: end -->
+
+Calculates differences-in-differences treatment effects for every treated unit. The more granular estimator allows for diagnostics, aggregation on custom variables, and imposes composition balance even in unbalanced panels. It extends the functionality of the [did](https://bcallaway11.github.io/did/) package in applications where within treatment-group heterogeneity is high and can generalize to non-binary treatments to produce dose-response functions.
+
+## Installation
+
+You can install the development version of didunit like so:
+
+You can install the development version of didwrappers
+
+``` {r}
+#install.packages("devtools")
+#devtools::install_github("ransiw/didunit", build_vignettes = TRUE)
+```
+
+## Example
+
+This is a basic example generating code with a sample dataset:
+
+```{r example}
+library(didunit)
+```
+
+Simulate sample data
+
+```{r}
+simdata = sim_data()
+head(simdata[,c("unit","time","treatg","dosage","y")])
+```
+
+Run the first-step `att_it()` function to get estimates for each treated unit at each time and tabulate a sample of these.
+```{r}
+attobject = att_it(yname = "y", tname = "time", gname = "treatg", idname ="unit", data = simdata)
+attdf = attit_table(attobject)
+head(attdf)
+```
+
+Now aggregate all post-treatment effects of a treated unit. 
+
+```{r}
+agtobject = aggite(attobject,type="unit")
+aggite_table(agtobject)
+```
+
+Sample a data frame with different dosage amounts and aggregate to the unit level.
+
+```{r}
+attobject = att_it(yname = "y", tname = "time", gname = "treatg", idname ="unit", customnames = "dosage", data = sim_data(dosage = rep(c(1,2),each=5)))
+agtobject = aggite(attobject,type="unit")
+aggite_table(agtobject)
+```
+
+Aggregate to the dosage level by specifying dosage as the `type`. 
+
+```{r}
+agtobject = aggite(attobject,type="dosage")
+aggite_table(agtobject)
+```
+
+

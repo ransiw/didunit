@@ -17,3 +17,5 @@ Imports:
 Depends: 
     R (>= 2.10)
 LazyData: true
+URL: https://github.com/ransiw/didunit
+BugReports: https://github.com/ransiw/didunit/issues

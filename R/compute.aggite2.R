@@ -37,6 +37,8 @@ compute.aggite2 <- function(MP,
   t <- MP$t
   id <- MP$id
   att <- MP$att
+  lci <- MP$lci
+  uci <- MP$uci
   deltaY <- MP$deltaY
   dp <- MP$DIDparams
   CS <- MP$CS
@@ -74,7 +76,7 @@ compute.aggite2 <- function(MP,
   }
 
   if(na.rm){
-    notna <- (!is.na(att))
+    notna <- (!is.na(att) & lci<uci)
     group <- group[notna]
     t <- t[notna]
     id <- id[notna]

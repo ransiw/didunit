@@ -71,8 +71,8 @@ compute.aggite2 <- function(MP,
     stop('`type` must be one of c("group", or custom aggregators)')
   }
 
-  if(!(type2 %in% c("dynamic"))) {
-    stop('`type2` must "dynamic')
+  if(!(type2 %in% c("dynamic","calendar"))) {
+    stop('`type2` must "dynamic" or "calendar"')
   }
 
   if(na.rm){
@@ -402,6 +402,187 @@ compute.aggite2 <- function(MP,
                        lci.egt=dynamic.lci.c,
                        uci.egt=dynamic.uci.c,
                        count.egt=dynamic.count.c,
+                       crit.val.egt=NULL,
+                       inf.function = NULL,
+                       indep = indep,
+                       call=call,
+                       min_e=min_e,
+                       max_e=max_e,
+                       balance_e=balance_e,
+                       DIDparams=dp
+      ))
+
+    }
+
+
+  }
+
+  if (type2 == "calendar") {
+
+    # drop time periods where no one is treated yet
+    # (can't get treatment effects in those periods)
+    minG <- min(group)
+    calendar.tlist <- tlist[tlist>=minG]
+
+    if (type == "group"){
+
+      # compute atts that are specific to each group and event time
+      egtlist = lapply(glist, function(g) {
+        lapply(calendar.tlist, function(t1){list(egt=g,egt2=t1)
+        })
+      })
+      egtlist = do.call(c,egtlist)
+
+      calendar.i.g <- lapply(glist, function(g){
+        lapply(calendar.tlist,function(t1){
+          whichi <- which( (group == g) & (t == t1) & (group <= t))
+          if (length(whichi)==0){
+            list(att = NA,lci=NA,uci=NA, count = 0)
+          } else{
+            whichiN <- id[which((group == g) & (t == t1) & (group <= t))]
+            # calculate the aggregate att and deltaYi
+            atti <- att[whichi]
+            deltaYi <- deltaY[whichi]
+            att.i <- sum(atti*(pg[whichi]/sum(pg[whichi])))
+            deltaY.i <- sum(deltaYi*(pg[whichi]/sum(pg[whichi])))
+            # aggregate predictions and residuals within time blocks
+            idx_by_id <- split(seq_along(whichiN),
+                               factor(whichiN, levels = unique(whichiN)))
+            pgw <- sapply(idx_by_id, function(idx)
+              rowMeans(t(as.matrix(pg[whichi]/sum(pg[whichi])))[, idx, drop = FALSE], na.rm = TRUE)
+            )
+            Mi <- sapply(idx_by_id, function(idx)
+              rowMeans(as.matrix(M[,whichi, drop=FALSE])[, idx, drop = FALSE], na.rm = TRUE)
+            )
+            CSi <- sapply(idx_by_id, function(idx)
+              rowMeans(as.matrix(CS[,whichi, drop=FALSE])[, idx, drop = FALSE], na.rm = TRUE)
+            )
+            IPWi <- sapply(idx_by_id, function(idx)
+              rowMeans(as.matrix(IPW[,whichi, drop=FALSE])[, idx, drop = FALSE], na.rm = TRUE)
+            )
+            if (indep){
+              seMi <- sapply(X = seq_len(ncol(Mi[,drop = FALSE])),FUN = function(j) weighted_sd(Mi[,drop = FALSE][, j], IPWi[,drop = FALSE][, j], na.rm = TRUE, unbiased = TRUE) )
+              seCSi <- sapply(X = seq_len(ncol(CSi[,drop = FALSE])),FUN = function(j) weighted_sd(CSi[,drop = FALSE][, j], IPWi[,drop = FALSE][, j], na.rm = TRUE, unbiased = TRUE) )
+              LC.i <- (deltaY.i-att.i)-stats::qnorm(1-alp/2)*sqrt(sum((seMi^2+seCSi^2)*(pgw/sum(pgw))^2))
+              UC.i <- (deltaY.i-att.i)+stats::qnorm(1-alp/2)*sqrt(sum((seMi^2+seCSi^2)*(pgw/sum(pgw))^2))
+            } else{
+              # find the Bonferroni mean of the prediction intervals
+              LCi <- sapply(X = seq_len(ncol(CSi[,drop = FALSE])),FUN = function(j) weighted_quantile(Mi[,drop = FALSE][, j]-abs(CSi[,drop = FALSE])[, j], IPWi[,drop = FALSE][, j],alpha=alp/length(whichiN),lower = TRUE) )
+              UCi <- sapply(X = seq_len(ncol(CSi[,drop = FALSE])),FUN = function(j) weighted_quantile(Mi[,drop = FALSE][, j]+abs(CSi[,drop = FALSE])[, j], IPWi[,drop = FALSE][, j],alpha=alp/length(whichiN),lower = FALSE) )
+              LC.i <- sum(LCi*(pgw/sum(pgw)))
+              UC.i <- sum(UCi*(pgw/sum(pgw)))
+            }
+            list(att = att.i,lci=deltaY.i-UC.i, uci=deltaY.i-LC.i, count = length(unique(whichiN)))
+          }
+        })
+      })
+
+
+      calendar.att.g <- unlist(BMisc::getListElement(do.call(c,calendar.i.g), "att"))
+      calendar.lci.g <- unlist(BMisc::getListElement(do.call(c,calendar.i.g), "lci"))
+      calendar.uci.g <- unlist(BMisc::getListElement(do.call(c,calendar.i.g), "uci"))
+      calendar.count.g <- unlist(BMisc::getListElement(do.call(c,calendar.i.g), "count"))
+
+
+      return(AGGITEobj(overall.att=NULL,
+                       overall.se=NULL,
+                       overall.lci = NULL,
+                       overall.uci = NULL,
+                       overall.count = NULL,
+                       type=type,
+                       type2=type2,
+                       egt = sapply(unlist(BMisc::getListElement(egtlist, "egt")),t2orig),
+                       egt2 = sapply(unlist(BMisc::getListElement(egtlist, "egt2")),t2orig),
+                       att.egt=calendar.att.g,
+                       se.egt=NULL,
+                       lci.egt=calendar.lci.g,
+                       uci.egt=calendar.uci.g,
+                       count.egt=calendar.count.g,
+                       crit.val.egt=NULL,
+                       inf.function = NULL,
+                       indep = indep,
+                       call=call,
+                       min_e=min_e,
+                       max_e=max_e,
+                       balance_e=balance_e,
+                       DIDparams=dp
+      ))
+    }
+
+    if (type %in% c(customnames)){
+
+      # compute atts that are specific to each group and event time
+      egtlist = lapply(cohortlist, function(g) {
+        lapply(calendar.tlist, function(t1){list(egt=g,egt2=t1)
+        })
+      })
+      egtlist = do.call(c,egtlist)
+
+      calendar.i.c <- lapply(cohortlist, function(h){
+        lapply(calendar.tlist,function(t1){
+          whichi <- which((ccohort == h) & (t == t1) & (group <= t))
+          if (length(whichi)==0){
+            list(att = NA,lci=NA,uci=NA, count = 0)
+          } else{
+            whichiN <- id[which((ccohort == h) & (t == t1) & (group <= t))]
+            # calculate the aggregate att and deltaYi
+            atti <- att[whichi]
+            deltaYi <- deltaY[whichi]
+            att.i <- sum(atti*(pg[whichi]/sum(pg[whichi])))
+            deltaY.i <- sum(deltaYi*(pg[whichi]/sum(pg[whichi])))
+            # aggregate predictions and residuals within time blocks
+            idx_by_id <- split(seq_along(whichiN),
+                               factor(whichiN, levels = unique(whichiN)))
+            pgw <- sapply(idx_by_id, function(idx)
+              rowMeans(t(as.matrix(pg[whichi]/sum(pg[whichi])))[, idx, drop = FALSE], na.rm = TRUE)
+            )
+            Mi <- sapply(idx_by_id, function(idx)
+              rowMeans(as.matrix(M[,whichi, drop=FALSE])[, idx, drop = FALSE], na.rm = TRUE)
+            )
+            CSi <- sapply(idx_by_id, function(idx)
+              rowMeans(as.matrix(CS[,whichi, drop=FALSE])[, idx, drop = FALSE], na.rm = TRUE)
+            )
+            IPWi <- sapply(idx_by_id, function(idx)
+              rowMeans(as.matrix(IPW[,whichi, drop=FALSE])[, idx, drop = FALSE], na.rm = TRUE)
+            )
+            if (indep){
+              seMi <- sapply(X = seq_len(ncol(Mi[,drop = FALSE])),FUN = function(j) weighted_sd(Mi[,drop = FALSE][, j], IPWi[,drop = FALSE][, j], na.rm = TRUE, unbiased = TRUE) )
+              seCSi <- sapply(X = seq_len(ncol(CSi[,drop = FALSE])),FUN = function(j) weighted_sd(CSi[,drop = FALSE][, j], IPWi[,drop = FALSE][, j], na.rm = TRUE, unbiased = TRUE) )
+              LC.i <- (deltaY.i-att.i)-stats::qnorm(1-alp/2)*sqrt(sum((seMi^2+seCSi^2)*(pgw/sum(pgw))^2))
+              UC.i <- (deltaY.i-att.i)+stats::qnorm(1-alp/2)*sqrt(sum((seMi^2+seCSi^2)*(pgw/sum(pgw))^2))
+            } else{
+              # find the Bonferroni mean of the prediction intervals
+              LCi <- sapply(X = seq_len(ncol(CSi[,drop = FALSE])),FUN = function(j) weighted_quantile(Mi[,drop = FALSE][, j]-abs(CSi[,drop = FALSE])[, j], IPWi[,drop = FALSE][, j],alpha=alp/length(whichiN),lower = TRUE) )
+              UCi <- sapply(X = seq_len(ncol(CSi[,drop = FALSE])),FUN = function(j) weighted_quantile(Mi[,drop = FALSE][, j]+abs(CSi[,drop = FALSE])[, j], IPWi[,drop = FALSE][, j],alpha=alp/length(whichiN),lower = FALSE) )
+              LC.i <- sum(LCi*(pgw/sum(pgw)))
+              UC.i <- sum(UCi*(pgw/sum(pgw)))
+            }
+            list(att = att.i,lci=deltaY.i-UC.i, uci=deltaY.i-LC.i, count = length(unique(whichiN)))
+          }
+        })
+      })
+
+
+      calendar.att.c <- unlist(BMisc::getListElement(do.call(c,calendar.i.c), "att"))
+      calendar.lci.c <- unlist(BMisc::getListElement(do.call(c,calendar.i.c), "lci"))
+      calendar.uci.c <- unlist(BMisc::getListElement(do.call(c,calendar.i.c), "uci"))
+      calendar.count.c <- unlist(BMisc::getListElement(do.call(c,calendar.i.c), "count"))
+
+
+      return(AGGITEobj(overall.att=NULL,
+                       overall.se=NULL,
+                       overall.lci=NULL,
+                       overall.uci=NULL,
+                       overall.count=NULL,
+                       type=type,
+                       type2=type2,
+                       egt= unlist(BMisc::getListElement(egtlist, "egt")),
+                       egt2 = sapply(unlist(BMisc::getListElement(egtlist, "egt2")),t2orig),
+                       att.egt=calendar.att.c,
+                       se.egt=NULL,
+                       lci.egt=calendar.lci.c,
+                       uci.egt=calendar.uci.c,
+                       count.egt=calendar.count.c,
                        crit.val.egt=NULL,
                        inf.function = NULL,
                        indep = indep,

@@ -63,7 +63,7 @@ An \code{\link{AGGITEobj}} object that holds the results from the aggregation.
 A function to take unit-time average treatment effects
 and aggregate them into sub-effects where there is more than one aggregating type.
 Possible aggregations include pairs of any of the following:
-"group" or a custom aggregation name with "dynamic".
+"group" or a custom aggregation name with "dynamic" or "calendar".
 }
 \examples{
 # first run the att_it() function

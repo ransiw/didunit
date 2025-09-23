@@ -3,7 +3,7 @@
 #' @description A function to take unit-time average treatment effects
 #'  and aggregate them into sub-effects where there is more than one aggregating type.
 #'  Possible aggregations include pairs of any of the following:
-#'  "group" or a custom aggregation name with "dynamic".
+#'  "group" or a custom aggregation name with "dynamic" or "calendar".
 #'
 #' @param MP an MP_i object (i.e., the results of the [att_it()] method)
 #' @param type Only allows "group" (default) and custom aggregators.

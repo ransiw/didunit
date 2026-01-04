@@ -80,6 +80,10 @@ compute.aggite <- function(MP,
     IPW <- IPW[, notna]
     #tlist <- sort(unique(t))
 
+    if (!any(!is.na(att[group <= t]))) {
+      stop("No non-missing post-treatment ATT for any units", call. = FALSE)
+    }
+
     if(type %in% c("unit", "simple", "group", customnames)){
       idlist <- sort(unique(id))
       # Get the units that have some non-missing ATT(g,t) in post-treatmemt periods
@@ -618,8 +622,8 @@ compute.aggite <- function(MP,
         rowMeans(as.matrix(IPW[,whichi, drop=FALSE])[, idx, drop = FALSE], na.rm = TRUE)
       )
       if (indep){
-        seMi <- sapply(X = seq_len(ncol(Mi[,drop = FALSE])),FUN = function(j) weighted_sd(Mi[,drop = FALSE][, j], IPWi[,drop = FALSE][, j], na.rm = TRUE, unbiased = TRUE) )
-        seCSi <- sapply(X = seq_len(ncol(CSi[,drop = FALSE])),FUN = function(j) weighted_sd(CSi[,drop = FALSE][, j], IPWi[,drop = FALSE][, j], na.rm = TRUE, unbiased = TRUE) )
+        seMi <- sapply(X = seq_len(NCOL(Mi)),FUN = function(j) weighted_sd(Mi[,drop = FALSE][, j], IPWi[,drop = FALSE][, j], na.rm = TRUE, unbiased = TRUE) )
+        seCSi <- sapply(X = seq_len(NCOL(CSi)),FUN = function(j) weighted_sd(CSi[,drop = FALSE][, j], IPWi[,drop = FALSE][, j], na.rm = TRUE, unbiased = TRUE) )
         LC.i <- (deltaY.i-att.i)-stats::qnorm(1-alp/2)*sqrt(sum((seMi^2+seCSi^2)*(pgw/sum(pgw))^2))
         UC.i <- (deltaY.i-att.i)+stats::qnorm(1-alp/2)*sqrt(sum((seMi^2+seCSi^2)*(pgw/sum(pgw))^2))
       } else{

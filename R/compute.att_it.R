@@ -353,8 +353,13 @@ compute.att_it <- function(dp) {
         }
       }
 
+      adap_conformal_split = conformal_split
+
       # remove if insufficient for calculating conformal splits
-      if (((length(ind[G==0]))-conformal_split)<(ncol(as.matrix(covariates))+3) | floor(length(ind[G==0])/conformal_split)==1){
+      if (((length(ind[G==0]))-adap_conformal_split)<(ncol(as.matrix(covariates))+3) | floor(length(ind[G==0])/adap_conformal_split)==1){
+        if (adap_conformal_split>5){
+          adap_conformal_split = 5
+        }
         attgt.list[[counter]] <- list(att=NA, id=idlist[g], group=glist[g], year=tlist[(t+tfac)],ipwqual=NA, lci=NA, uci=NA, post=post.treat, baseline=Ypre[G==1], deltaY=Ypost[G==1]-Ypre[G==1], attcalc=NA, count=length(ind))
         counter <- counter+1
         warning(paste0("Not enough control units for id ", idlist[g], " in time period ", tlist[t+tfac], "for cross fitting. Consider reducing conformal_split parameter."))
@@ -374,7 +379,7 @@ compute.att_it <- function(dp) {
                             alpha = alp,
                             dist.family = dist.family,
                             weighted_conformal = weighted_conformal,
-                            conformal_split = conformal_split)
+                            conformal_split = adap_conformal_split)
       } else if (est_method == "ipw") {
         # inverse-probability weights
         attgt <- ipw_att(ind,Ypost,Ypre,G,
@@ -383,7 +388,7 @@ compute.att_it <- function(dp) {
                          alpha = alp,
                          dist.family = dist.family,
                          weighted_conformal = weighted_conformal,
-                         conformal_split = conformal_split)
+                         conformal_split = adap_conformal_split)
       } else if (est_method == "reg") {
         # regression
         attgt <- oreg_att(ind,Ypost,Ypre,G,
@@ -392,7 +397,7 @@ compute.att_it <- function(dp) {
                           alpha = alp,
                           dist.family = dist.family,
                           weighted_conformal = weighted_conformal,
-                          conformal_split = conformal_split)
+                          conformal_split = adap_conformal_split)
       } else {
         # doubly robust, this is default
         attgt <- drreg_att(ind,Ypost,Ypre,G,
@@ -401,7 +406,7 @@ compute.att_it <- function(dp) {
                            alpha = alp,
                            dist.family = dist.family,
                            weighted_conformal = weighted_conformal,
-                           conformal_split = conformal_split)
+                           conformal_split = adap_conformal_split)
       }
 
       if (pscore_problems_likely & overlap=="trim") {

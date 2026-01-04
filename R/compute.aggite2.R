@@ -87,6 +87,10 @@ compute.aggite2 <- function(MP,
     IPW <- IPW[, notna]
     #tlist <- sort(unique(t))
 
+    if (!any(!is.na(att[group <= t]))) {
+      stop("No non-missing post-treatment ATT for any units", call. = FALSE)
+    }
+
     if(type %in% c("unit", "simple", "group", customnames)){
       idlist <- sort(unique(id))
       # Get the units that have some non-missing ATT(g,t) in post-treatmemt periods
